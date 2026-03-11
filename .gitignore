@@ -1,0 +1,48 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+src/.venv/
+
+# ── Audio files (large / potentially copyrighted) ─────────────────────────────
+data/*.mp3
+data/*.wav
+data/*.flac
+data/*.ogg
+data/*.m4a
+data/*.aac
+data/*.opus
+# Keep the data/ folder itself (for README instructions)
+!data/.gitkeep
+
+# ── Generated artefacts ────────────────────────────────────────────────────────
+embeddings/*.npz
+embeddings/*.npy
+# Keep the embeddings/ folder itself
+!embeddings/.gitkeep
+
+# ── Plots / exports ────────────────────────────────────────────────────────────
+*.html
+plots/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── OS / editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

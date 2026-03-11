@@ -1,0 +1,25 @@
+[project]
+name = "amour_poc"
+version = "0.1.0"
+description = "aMOUR – a Music Oriented User Recommendation (POC)"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.1.0",
+    "torchaudio>=2.1.0",
+    "transformers>=4.40.0",
+    "accelerate>=0.27.0",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.1",
+    "numpy>=1.24.0",
+    "umap-learn>=0.5.6",
+    "plotly>=5.20.0",
+    "pandas>=2.0.0",
+    "tqdm>=4.66.0",
+    "nnaudio>=0.3.4",
+]
+
+
+[tool.uv]
+# PyTorch CUDA 12.1 wheels (matches RTX 4060 / driver ≥ 525)
+index-url = "https://download.pytorch.org/whl/cu121"
+extra-index-url = ["https://pypi.org/simple"]
