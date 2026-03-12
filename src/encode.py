@@ -1,15 +1,20 @@
 """
 aMOUR – encode.py
-Scans a directory of audio files, encodes each track with MERT on GPU,
-and saves a compressed .npz archive with embeddings + metadata.
+Scans a directory of audio files, encodes each track with a swappable encoder
+backend, and saves a compressed .npz archive with embeddings + metadata.
 
 Usage:
-    python src/encode.py --audio_dir data/ --output embeddings/embeddings.npz
-    python src/encode.py --audio_dir data/ --output embeddings/embeddings.npz --batch_size 8
+    python src/encode.py --audio_dir data/                           # MERT (default)
+    python src/encode.py --audio_dir data/ --encoder clap            # CLAP
+    python src/encode.py --audio_dir data/ --encoder music2vec       # music2vec
+    python src/encode.py --audio_dir data/ --batch_size 8            # larger GPU batches
+    python src/encode.py --audio_dir data/ --encoder clap --force    # re-encode everything
+
+Each encoder writes to a separate output file by default:
+    embeddings/mert.npz / embeddings/clap.npz / embeddings/music2vec.npz
 """
 
 import argparse
-import os
 import warnings
 from pathlib import Path
 
@@ -17,21 +22,19 @@ import librosa
 import numpy as np
 import torch
 from tqdm import tqdm
-from transformers import AutoModel, AutoProcessor
+
+from encoders import AVAILABLE_ENCODERS, get_encoder
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
 SUPPORTED_EXTENSIONS = {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".opus"}
-MERT_MODEL_ID = "m-a-p/MERT-v1-330M"
-MERT_SAMPLE_RATE = 24_000  # MERT expects 24 kHz
-CHUNK_DURATION_S = 30  # seconds per chunk — longer = richer embedding
-OVERLAP_S = 5  # overlap between chunks (smooths boundary artefacts)
+OVERLAP_S = 5
 
 
-def load_audio(path: Path, target_sr: int = MERT_SAMPLE_RATE) -> np.ndarray | None:
+def load_audio(path: Path, target_sr: int) -> np.ndarray | None:
     """Load and resample audio to mono @ target_sr. Returns None on failure."""
     try:
-        audio, sr = librosa.load(str(path), sr=target_sr, mono=True)
+        audio, _ = librosa.load(str(path), sr=target_sr, mono=True)
         return audio
     except Exception as exc:
         print(f"  [WARN] Could not load {path.name}: {exc}")
@@ -49,7 +52,6 @@ def chunk_audio(
     while start < len(audio):
         end = min(start + chunk_len, len(audio))
         chunk = audio[start:end]
-        # Pad last chunk if shorter than 1 s (avoid degenerate inputs)
         if len(chunk) < sr:
             break
         if len(chunk) < chunk_len:
@@ -61,89 +63,45 @@ def chunk_audio(
     return chunks
 
 
-def embed_chunks(
-    chunks: list[np.ndarray],
-    processor: AutoProcessor,
-    model: AutoModel,
-    device: torch.device,
-    batch_size: int,
-) -> np.ndarray:
-    """
-    Run MERT on a list of audio chunks in batches.
-    Returns a single (hidden_size,) vector = mean-pool across chunks and time.
-    """
-    all_chunk_embeddings = []
-
-    for batch_start in range(0, len(chunks), batch_size):
-        batch = chunks[batch_start : batch_start + batch_size]
-
-        inputs = processor(
-            batch,
-            sampling_rate=MERT_SAMPLE_RATE,
-            return_tensors="pt",
-            padding=True,
-        )
-        inputs = {k: v.to(device) for k, v in inputs.items()}
-
-        with torch.no_grad():
-            outputs = model(**inputs, output_hidden_states=True)
-
-        # outputs.last_hidden_state: (B, T, H)
-        # Mean-pool over time dimension → (B, H)
-        hidden = outputs.last_hidden_state  # last transformer layer
-        pooled = hidden.mean(dim=1)  # (B, H)
-        all_chunk_embeddings.append(pooled.cpu().float().numpy())
-
-    # Stack all chunks then average → one vector per track
-    stacked = np.concatenate(all_chunk_embeddings, axis=0)  # (n_chunks, H)
-    return stacked.mean(axis=0)  # (H,)
-
-
 def scan_audio_files(audio_dir: Path) -> list[Path]:
-    files = sorted(
+    return sorted(
         p for p in audio_dir.rglob("*") if p.suffix.lower() in SUPPORTED_EXTENSIONS
     )
-    return files
 
 
 def main():
-    parser = argparse.ArgumentParser(description="aMOUR – MERT audio encoder")
+    encoder_names = ", ".join(AVAILABLE_ENCODERS.keys())
+
+    parser = argparse.ArgumentParser(description="aMOUR – audio encoder")
     parser.add_argument(
-        "--audio_dir",
-        type=Path,
-        default=Path("data"),
+        "--encoder", type=str, default="mert",
+        help=f"Encoder backend to use ({encoder_names})",
+    )
+    parser.add_argument(
+        "--audio_dir", type=Path, default=Path("data"),
         help="Root directory containing audio files (recursive scan)",
     )
     parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("embeddings/embeddings.npz"),
-        help="Output .npz file path",
+        "--output", type=Path, default=None,
+        help="Output .npz file path (default: embeddings/<encoder>.npz)",
     )
     parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=4,
-        help="Number of 30-s chunks per GPU batch (lower if OOM)",
+        "--batch_size", type=int, default=4,
+        help="Number of chunks per GPU batch (lower if OOM)",
     )
     parser.add_argument(
-        "--chunk_s",
-        type=int,
-        default=CHUNK_DURATION_S,
-        help="Chunk duration in seconds",
-    )
-    parser.add_argument(
-        "--overlap_s",
-        type=int,
-        default=OVERLAP_S,
+        "--overlap_s", type=int, default=OVERLAP_S,
         help="Overlap between consecutive chunks in seconds",
     )
     parser.add_argument(
-        "--force",
-        action="store_true",
+        "--force", action="store_true",
         help="Re-encode files even if output already exists",
     )
     args = parser.parse_args()
+
+    # Default output path based on encoder name
+    if args.output is None:
+        args.output = Path(f"embeddings/{args.encoder.lower()}.npz")
 
     # ── Device ──────────────────────────────────────────────────────────────
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -155,14 +113,9 @@ def main():
     else:
         print("No GPU found — running on CPU (this will be slow)")
 
-    # ── Load model ──────────────────────────────────────────────────────────
-    print(f"\nLoading {MERT_MODEL_ID} …")
-    processor = AutoProcessor.from_pretrained(MERT_MODEL_ID, trust_remote_code=True)
-    model = AutoModel.from_pretrained(MERT_MODEL_ID, trust_remote_code=True)
-    model = model.to(device).eval()
-    print(
-        f"Model loaded  ({sum(p.numel() for p in model.parameters()) / 1e6:.0f}M params)\n"
-    )
+    # ── Load encoder ────────────────────────────────────────────────────────
+    encoder = get_encoder(args.encoder, device=device)
+    print(f"\n{encoder}\n")
 
     # ── Scan files ──────────────────────────────────────────────────────────
     audio_files = scan_audio_files(args.audio_dir)
@@ -190,27 +143,26 @@ def main():
     embeddings: dict[str, np.ndarray] = dict(existing)
     track_names: list[str] = list(existing_meta.keys()) if existing_meta else []
     track_paths: list[str] = list(existing_meta.values()) if existing_meta else []
-
-    # Build lookup of already-done file stems
     done_keys = set(embeddings.keys())
 
     to_encode = [f for f in audio_files if f.stem not in done_keys]
-    print(f"Encoding {len(to_encode)} new track(s) …\n")
+    print(f"Encoding {len(to_encode)} new track(s) with {encoder.name} …\n")
 
     for audio_path in tqdm(to_encode, unit="track"):
-        audio = load_audio(audio_path)
+        audio = load_audio(audio_path, target_sr=encoder.sample_rate)
         if audio is None:
             continue
 
-        chunks = chunk_audio(audio, MERT_SAMPLE_RATE, args.chunk_s, args.overlap_s)
+        chunks = chunk_audio(
+            audio, encoder.sample_rate, encoder.chunk_duration_s, args.overlap_s,
+        )
         if not chunks:
             print(f"  [WARN] {audio_path.name} too short to chunk, skipping.")
             continue
 
-        embedding = embed_chunks(chunks, processor, model, device, args.batch_size)
+        embedding = encoder.encode_chunks(chunks, batch_size=args.batch_size)
 
         key = audio_path.stem
-        # Deduplicate keys (same stem, different folder)
         if key in embeddings:
             key = f"{audio_path.parent.name}__{audio_path.stem}"
         embeddings[key] = embedding
@@ -224,9 +176,10 @@ def main():
         **embeddings,
         _meta_names=np.array(track_names),
         _meta_paths=np.array(track_paths),
+        _meta_encoder=np.array(encoder.name),
     )
     print(f"\nSaved {len(embeddings)} embeddings → {args.output}")
-    print(f"Embedding dimension: {next(iter(embeddings.values())).shape[0]}")
+    print(f"Encoder: {encoder.name}  |  Embedding dim: {encoder.embedding_dim}")
 
 
 if __name__ == "__main__":

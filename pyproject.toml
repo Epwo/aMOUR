@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "aMOUR – a Music Oriented User Recommendation (POC)"
 requires-python = ">=3.11"
 dependencies = [
-    "torch>=2.1.0",
-    "torchaudio>=2.1.0",
+    "torch>=2.6.0",
+    "torchaudio>=2.6.0",
     "transformers>=4.40.0",
     "accelerate>=0.27.0",
     "librosa>=0.10.0",
@@ -19,7 +19,11 @@ dependencies = [
 ]
 
 
-[tool.uv]
-# PyTorch CUDA 12.1 wheels (matches RTX 4060 / driver ≥ 525)
-index-url = "https://download.pytorch.org/whl/cu121"
-extra-index-url = ["https://pypi.org/simple"]
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchaudio = { index = "pytorch-cu124" }
