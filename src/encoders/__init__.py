@@ -13,11 +13,13 @@ from encoders.base import AudioEncoder
 from encoders.mert import MERTEncoder
 from encoders.clap import CLAPEncoder
 from encoders.music2vec import Music2VecEncoder
+from encoders.encodec import EnCodecEncoder
 
 AVAILABLE_ENCODERS: dict[str, type[AudioEncoder]] = {
     "mert": MERTEncoder,
     "clap": CLAPEncoder,
     "music2vec": Music2VecEncoder,
+    "encodec": EnCodecEncoder,
 }
 
 
@@ -37,7 +39,11 @@ def get_encoder(name: str, device=None, **kwargs) -> AudioEncoder:
     """
     key = name.lower().replace("-", "").replace("_", "")
     # Normalise common aliases
-    aliases = {"mertv1": "mert", "mert330m": "mert", "clapmusic": "clap", "m2v": "music2vec"}
+    aliases = {
+        "mertv1": "mert", "mert330m": "mert",
+        "clapmusic": "clap", "m2v": "music2vec",
+        "encodec48khz": "encodec", "encodec48": "encodec",
+    }
     key = aliases.get(key, key)
 
     if key not in AVAILABLE_ENCODERS:
