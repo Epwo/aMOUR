@@ -10,8 +10,8 @@ Usage:
     python src/encode.py --audio_dir data/ --batch_size 8            # larger GPU batches
     python src/encode.py --audio_dir data/ --encoder clap --force    # re-encode everything
 
-Each encoder writes to a separate output file by default:
-    embeddings/mert.npz / embeddings/clap.npz / embeddings/music2vec.npz
+Each encoder + dataset combo gets its own output file:
+    embeddings/mert_deezer.npz / embeddings/clap_deezer.npz / …
 """
 
 import argparse
@@ -99,9 +99,10 @@ def main():
     )
     args = parser.parse_args()
 
-    # Default output path based on encoder name
+    # Default output: embeddings/<encoder>_<dataset>.npz
     if args.output is None:
-        args.output = Path(f"embeddings/{args.encoder.lower()}.npz")
+        dataset_name = args.audio_dir.name  # e.g. "deezer", "fma_small"
+        args.output = Path(f"embeddings/{args.encoder.lower()}_{dataset_name}.npz")
 
     # ── Device ──────────────────────────────────────────────────────────────
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

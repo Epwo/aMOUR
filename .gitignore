@@ -17,6 +17,7 @@ src/.venv/
 
 # ── Audio files (large / potentially copyrighted) ─────────────────────────────
 data/**/*.mp3
+data/**/*.webm
 data/**/*.wav
 data/**/*.flac
 data/**/*.ogg
