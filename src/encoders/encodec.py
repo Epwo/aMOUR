@@ -41,6 +41,11 @@ class EnCodecEncoder(AudioEncoder):
         Encode a single audio chunk → (128,) vector.
         Handles EnCodec's internal 1-s sub-chunking and normalisation.
         """
+        # EnCodec 48kHz expects stereo (2, T). Our pipeline loads mono (T,).
+        # Duplicate mono to stereo so the processor doesn't choke.
+        if audio.ndim == 1:
+            audio = np.stack([audio, audio])  # (2, T)
+
         inputs = self.processor(
             raw_audio=audio,
             sampling_rate=self.sample_rate,
