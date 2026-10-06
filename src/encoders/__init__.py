@@ -1,55 +1,38 @@
 """
 aMOUR – encoders package
-Swappable audio encoder backends.
+Swappable music encoder backends.
 
-Usage:
-    from encoders import get_encoder, AVAILABLE_ENCODERS
-
-    encoder = get_encoder("mert", device=device)
-    embedding = encoder.encode_track(audio_array)
+    from encoders import get_encoder
+    encoder = get_encoder("muq", device=device)
+    vector = encoder.encode_chunks(chunks)
 """
 
-from encoders.base import AudioEncoder
-from encoders.mert import MERTEncoder
+from encoders.base import MusicEncoder
 from encoders.clap import CLAPEncoder
-from encoders.music2vec import Music2VecEncoder
-from encoders.encodec import EnCodecEncoder
+from encoders.mert import MERTEncoder
+from encoders.muq import MuQEncoder, MuQMuLanEncoder
+from encoders.omar import OMARRQEncoder
 
-AVAILABLE_ENCODERS: dict[str, type[AudioEncoder]] = {
+AVAILABLE_ENCODERS: dict[str, type[MusicEncoder]] = {
+    "muq": MuQEncoder,
+    "mulan": MuQMuLanEncoder,
+    "omar": OMARRQEncoder,
     "mert": MERTEncoder,
     "clap": CLAPEncoder,
-    "music2vec": Music2VecEncoder,
-    "encodec": EnCodecEncoder,
+}
+
+_ALIASES = {
+    "muqmulan": "mulan", "omarrq": "omar", "mertv1": "mert", "clapmusic": "clap",
 }
 
 
-def get_encoder(name: str, device=None, **kwargs) -> AudioEncoder:
-    """
-    Factory: instantiate an encoder by name.
-
-    Parameters
-    ----------
-    name   : one of "mert", "clap", "music2vec"
-    device : torch.device (default: auto-detect CUDA)
-    **kwargs : forwarded to the encoder constructor
-
-    Returns
-    -------
-    An initialised AudioEncoder ready for .encode_chunks()
-    """
+def canonical_name(name: str) -> str:
     key = name.lower().replace("-", "").replace("_", "")
-    # Normalise common aliases
-    aliases = {
-        "mertv1": "mert", "mert330m": "mert",
-        "clapmusic": "clap", "m2v": "music2vec",
-        "encodec48khz": "encodec", "encodec48": "encodec",
-    }
-    key = aliases.get(key, key)
-
+    key = _ALIASES.get(key, key)
     if key not in AVAILABLE_ENCODERS:
-        raise ValueError(
-            f"Unknown encoder '{name}'. "
-            f"Available: {', '.join(AVAILABLE_ENCODERS)}"
-        )
+        raise ValueError(f"Unknown encoder '{name}'. Available: {', '.join(AVAILABLE_ENCODERS)}")
+    return key
 
-    return AVAILABLE_ENCODERS[key](device=device, **kwargs)
+
+def get_encoder(name: str, device=None, layers: str | None = None) -> MusicEncoder:
+    return AVAILABLE_ENCODERS[canonical_name(name)](device=device, layers=layers)

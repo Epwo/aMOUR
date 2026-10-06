@@ -25,13 +25,13 @@ Structure after download:
 """
 
 import argparse
-import os
-import shutil
-import subprocess
 import sys
 import zipfile
 from pathlib import Path
 from urllib.request import urlretrieve
+
+for _stream in (sys.stdout, sys.stderr):  # Windows cp1252 consoles
+    _stream.reconfigure(encoding="utf-8", errors="replace")
 
 
 FMA_AUDIO_URL = "https://os.unil.cloud.switch.ch/fma/fma_small.zip"

@@ -1,53 +1,35 @@
 """
 aMOUR – encoders.clap
-CLAP (larger_clap_music) backend — contrastive audio-text model, 512-D embeddings.
-
-Note: CLAP's processor truncates/pads audio to a fixed window (~10 s).
-We chunk and mean-pool to handle full-length tracks.
+LAION CLAP (larger_clap_music) — contrastive audio–text model, 48 kHz, 512-D.
+Kept as the general-audio baseline to measure the music models against.
 """
 
 import numpy as np
 import torch
 from transformers import ClapModel, ClapProcessor
 
-from encoders.base import AudioEncoder
-
-MODEL_ID = "laion/larger_clap_music"
+from encoders.base import MusicEncoder
 
 
-class CLAPEncoder(AudioEncoder):
+class CLAPEncoder(MusicEncoder):
     name = "CLAP-music"
+    model_id = "laion/larger_clap_music"
     sample_rate = 48_000
     embedding_dim = 512
     chunk_duration_s = 10  # CLAP's native window
+    supports_text = True
 
     def _load_model(self) -> None:
-        print(f"Loading {MODEL_ID} …")
-        self.processor = ClapProcessor.from_pretrained(MODEL_ID)
-        self.model = ClapModel.from_pretrained(MODEL_ID).to(self.device).eval()
-        print(f"  {self.name} ready ({self.param_count() / 1e6:.0f}M params)")
+        self.processor = ClapProcessor.from_pretrained(self.model_id)
+        self.model = ClapModel.from_pretrained(self.model_id).to(self.device).eval()
 
-    def encode_chunks(
-        self,
-        chunks: list[np.ndarray],
-        batch_size: int = 4,
-    ) -> np.ndarray:
-        all_pooled = []
-        for i in range(0, len(chunks), batch_size):
-            batch = chunks[i : i + batch_size]
-            inputs = self.processor(
-                audios=batch,
-                sampling_rate=self.sample_rate,
-                return_tensors="pt",
-                padding=True,
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+    def embed_batch(self, batch: list[np.ndarray]) -> torch.Tensor:
+        inputs = self.processor(audio=batch, sampling_rate=self.sample_rate, return_tensors="pt")
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        return self.model.get_audio_features(**inputs)
 
-            with torch.no_grad():
-                # get_audio_features → (B, 512), already projected
-                embeddings = self.model.get_audio_features(**inputs)
-
-            all_pooled.append(embeddings.cpu().float().numpy())
-
-        stacked = np.concatenate(all_pooled, axis=0)   # (n_chunks, 512)
-        return stacked.mean(axis=0)                     # (512,)
+    @torch.no_grad()
+    def embed_text(self, texts: list[str]) -> np.ndarray:
+        inputs = self.processor(text=texts, return_tensors="pt", padding=True)
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        return self.model.get_text_features(**inputs).float().cpu().numpy()
