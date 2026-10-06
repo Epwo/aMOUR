@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr:*)",
+      "Bash(where gh:*)",
+      "Bash(winget list:*)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(python -c \"import torch; print\\(''torch version:'', torch.__version__\\); print\\(''cuda available:'', torch.cuda.is_available\\(\\)\\); print\\(''cuda version:'', torch.version.cuda if torch.version.cuda else ''None''\\)\")",
+      "Bash(uv run:*)",
+      "Bash(nvidia-smi --query-gpu=name,driver_version --format=csv,noheader)",
+      "Bash(nvidia-smi)",
+      "Bash(uv sync:*)",
+      "Bash(uv pip:*)",
+      "WebFetch(domain:developers.deezer.com)",
+      "WebFetch(domain:publicapi.dev)",
+      "WebFetch(domain:api.deezer.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ]
+  }
+}
