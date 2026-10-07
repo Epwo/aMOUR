@@ -17,6 +17,8 @@ dependencies = [
     "tqdm>=4.66.0",
     "nnaudio>=0.3.4",
     "yt-dlp>=2024.0.0",
+    "muq>=0.1.0",
+    "omar-rq>=0.2.1",
 ]
 
 

@@ -30,12 +30,17 @@ import argparse
 import csv
 import json
 import re
+import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 API_BASE = "https://api.deezer.com"
 PAGE_SIZE = 100  # max per Deezer API request
+
+for _stream in (sys.stdout, sys.stderr):  # Windows cp1252 consoles
+    _stream.reconfigure(encoding="utf-8", errors="replace")
 
 
 # ── Deezer API helpers ───────────────────────────────────────────────────────
@@ -54,7 +59,7 @@ def _api_get(url: str) -> dict:
 
 def search_users(query: str, limit: int = 10) -> list[dict]:
     """Search for Deezer users by name."""
-    data = _api_get(f"{API_BASE}/search/user?q={query}&limit={limit}")
+    data = _api_get(f"{API_BASE}/search/user?q={quote(query)}&limit={limit}")
     return data.get("data", [])
 
 
@@ -359,7 +364,7 @@ def main() -> None:
         ok, fail, skip = download_tracks(tracks, args.output, args.max_duration)
         print(f"\nDone: {ok} downloaded, {skip} skipped, {fail} failed")
         print(f"\nNext step:")
-        print(f"  python src/encode.py --audio_dir {args.output} --encoder mert")
+        print(f"  python src/encode.py --audio_dir {args.output} --encoder muq")
     else:
         print("Add --download to download audio from YouTube.")
         print(f"  python src/fetch_deezer.py {user_id} --download")
